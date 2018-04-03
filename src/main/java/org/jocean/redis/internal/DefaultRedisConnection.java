@@ -15,7 +15,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.redis.RedisClient.RedisConnection;
-import org.jocean.redis.impl.RedisHandlers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

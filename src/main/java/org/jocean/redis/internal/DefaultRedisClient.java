@@ -12,7 +12,6 @@ import org.jocean.http.client.impl.DefaultChannelPool;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.redis.RedisClient;
-import org.jocean.redis.impl.RedisHandlers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
