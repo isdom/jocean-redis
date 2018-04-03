@@ -1,0 +1,15 @@
+apply from: 'http://git.jocean.org/jocean/devconf/raw/master/devconf/build-lib.gradle'
+
+configurations {
+    all*.exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    all*.exclude group: 'log4j', module: 'log4j'
+    all*.exclude group: 'commons-logging', module: 'commons-logging'
+    all { resolutionStrategy.cacheChangingModulesFor 1, 'minutes' }
+}
+
+dependencies {
+    compile 'org.jocean:jocean-http:0.0.2-SNAPSHOT'
+    
+	testCompile 'junit:junit:4.12'
+    testCompile 'ch.qos.logback:logback-classic:1.2.2'
+}
