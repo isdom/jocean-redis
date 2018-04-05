@@ -110,20 +110,12 @@ class DefaultRedisConnection
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 RedisHandlers.ON_EXCEPTION_CAUGHT,
-                new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable cause) {
-                        fireClosed(cause);
-                    }});
+                (Action1<Throwable>)cause->fireClosed(cause));
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 RedisHandlers.ON_CHANNEL_INACTIVE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        fireClosed(new TransportException("channelInactive of " + channel));
-                    }});
+                (Action0)()->fireClosed(new TransportException("channelInactive of " + channel)));
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
@@ -160,11 +152,7 @@ class DefaultRedisConnection
 
     @Override
     public Action0 closer() {
-        return new Action0() {
-            @Override
-            public void call() {
-                close();
-            }};
+        return ()->close();
     }
     
     @Override
@@ -385,11 +373,7 @@ class DefaultRedisConnection
             reqSubscriptionUpdater.set(DefaultRedisConnection.this, 
                     request.subscribe(buildRequestObserver(request)));
             
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _op.doOnUnsubscribeResponse(DefaultRedisConnection.this, subscriber);
-                }}));
+            subscriber.add(Subscriptions.create(()->_op.doOnUnsubscribeResponse(this, subscriber)));
         } else {
             // _respSubscriber field has already setted
             subscriber.onError(new RuntimeException("response subscriber already setted."));
