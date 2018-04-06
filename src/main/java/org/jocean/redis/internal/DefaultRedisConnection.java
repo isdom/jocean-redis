@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.jocean.http.CloseException;
 import org.jocean.http.TransportException;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -19,8 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -89,8 +88,8 @@ class DefaultRedisConnection
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", isActive=").append(isActive())
                 .append(", isTransacting=").append(isTransacting())
-                .append(", reqSubscription=").append(_reqSubscription)
-                .append(", respSubscriber=").append(_respSubscriber)
+                .append(", outboundSubscription=").append(_outboundSubscription)
+                .append(", inboundSubscriber=").append(_inboundSubscriber)
                 .append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
@@ -136,13 +135,8 @@ class DefaultRedisConnection
     }
     
     @Override
-    public Observable<? extends RedisMessage> defineInteraction(
-            final Observable<? extends RedisMessage> request) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<RedisMessage>() {
-            @Override
-            public void call(final Subscriber<? super RedisMessage> subscriber) {
-                _op.subscribeResponse(DefaultRedisConnection.this, request, subscriber);
-            }});
+    public Observable<? extends RedisMessage> defineInteraction(final Observable<? extends RedisMessage> request) {
+        return Observable.unsafeCreate(subscriber->this._op.subscribeResponse(this, request, subscriber));
     }
 
     @Override
@@ -157,7 +151,7 @@ class DefaultRedisConnection
     
     @Override
     public void close() {
-        fireClosed(new RuntimeException("close()"));
+        fireClosed(new CloseException());
     }
 
     @Override
@@ -194,45 +188,61 @@ class DefaultRedisConnection
         if (LOG.isDebugEnabled()) {
             LOG.debug("close active redis connection[channel: {}] by {}", 
                     this._channel, 
-                    ExceptionUtils.exception2detail(e));
+                    errorAsString(e));
         }
         
-        removeRespHandler();
+        removeInboundHandler();
         
         // notify response Subscriber with error
-        releaseRespWithError(e);
+        releaseInboundWithError(e);
         
-        unsubscribeRequest();
+        unsubscribeOutbound();
         
         this._terminateAwareSupport.fireAllTerminates(this);
     }
 
-    private void removeRespHandler() {
-        final ChannelHandler handler = respHandlerUpdater.getAndSet(this, null);
+    private static String errorAsString(final Throwable e) {
+        return e != null 
+            ?
+                (e instanceof CloseException)
+                ? "close()" 
+                : ExceptionUtils.exception2detail(e)
+            : "no error"
+            ;
+    }
+    
+    private void setInboundHandler(final ChannelHandler handler) {
+        inboundHandlerUpdater.set(DefaultRedisConnection.this, handler);
+    }
+
+    private void removeInboundHandler() {
+        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
         if (null != handler) {
             Nettys.actionToRemoveHandler(this._channel, handler).call();
         }
     }
 
-    private void releaseRespWithError(final Throwable e) {
+    private void releaseInboundWithError(final Throwable e) {
         @SuppressWarnings("unchecked")
-        final Subscriber<? super RedisMessage> respSubscriber = respSubscriberUpdater.getAndSet(this, null);
-        if (null != respSubscriber
-           && !respSubscriber.isUnsubscribed()) {
+        final Subscriber<? super RedisMessage> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
+        if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
             try {
-                respSubscriber.onError(e);
+                inboundSubscriber.onError(e);
             } catch (Exception error) {
                 LOG.warn("exception when invoke {}.onError, detail: {}",
-                    respSubscriber, ExceptionUtils.exception2detail(e));
+                    inboundSubscriber, ExceptionUtils.exception2detail(e));
             }
         }
     }
 
-    private void unsubscribeRequest() {
-        final Subscription reqSubscription = reqSubscriptionUpdater.getAndSet(this, null);
-        if (null != reqSubscription
-            && !reqSubscription.isUnsubscribed()) {
-            reqSubscription.unsubscribe();
+    private void setOutboundSubscription(final Subscription subscription) {
+        outboundSubscriptionUpdater.set(this, subscription);
+    }
+    
+    private void unsubscribeOutbound() {
+        final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
+        if (null != subscription && !subscription.isUnsubscribed()) {
+            subscription.unsubscribe();
         }
     }
 
@@ -244,7 +254,7 @@ class DefaultRedisConnection
                 final Observable<? extends RedisMessage> request,
                 final Subscriber<? super RedisMessage> subscriber);
         
-        public void responseOnNext(
+        public void onInmsgRecvd(
                 final DefaultRedisConnection connection,
                 final Subscriber<? super RedisMessage> subscriber,
                 final RedisMessage msg);
@@ -253,7 +263,7 @@ class DefaultRedisConnection
                 final DefaultRedisConnection connection,
                 final Subscriber<? super RedisMessage> subscriber);
         
-        public void requestOnNext(
+        public void sendOutmsg(
                 final DefaultRedisConnection connection,
                 final RedisMessage msg);
     }
@@ -268,11 +278,11 @@ class DefaultRedisConnection
         }
         
         @Override
-        public void responseOnNext(
+        public void onInmsgRecvd(
                 final DefaultRedisConnection connection,
                 final Subscriber<? super RedisMessage> subscriber,
-                final RedisMessage msg) {
-            connection.responseOnNext(subscriber, msg);
+                final RedisMessage inmsg) {
+            connection.processInmsg(subscriber, inmsg);
         }
         
         @Override
@@ -283,10 +293,10 @@ class DefaultRedisConnection
         }
         
         @Override
-        public void requestOnNext(
+        public void sendOutmsg(
                 final DefaultRedisConnection connection,
                 final RedisMessage msg) {
-            connection.requestOnNext(msg);
+            connection.doSendOutmsg(msg);
         }
     };
     
@@ -300,7 +310,7 @@ class DefaultRedisConnection
         }
         
         @Override
-        public void responseOnNext(
+        public void onInmsgRecvd(
                 final DefaultRedisConnection connection,
                 final Subscriber<? super RedisMessage> subscriber,
                 final RedisMessage msg) {
@@ -313,28 +323,28 @@ class DefaultRedisConnection
         }
 
         @Override
-        public void requestOnNext(
+        public void sendOutmsg(
                 final DefaultRedisConnection connection,
                 final RedisMessage msg) {
         }
     };
     
-    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, ChannelHandler> respHandlerUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, ChannelHandler.class, "_respHandler");
+    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, ChannelHandler> inboundHandlerUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, ChannelHandler.class, "_inboundHandler");
     
     @SuppressWarnings("unused")
-    private volatile ChannelHandler _respHandler;
+    private volatile ChannelHandler _inboundHandler;
     
-    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscription> reqSubscriptionUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscription.class, "_reqSubscription");
+    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscription> outboundSubscriptionUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscription.class, "_outboundSubscription");
     
-    private volatile Subscription _reqSubscription;
+    private volatile Subscription _outboundSubscription;
     
     @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscriber> respSubscriberUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscriber.class, "_respSubscriber");
+    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscriber> inboundSubscriberUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscriber.class, "_inboundSubscriber");
     
-    private volatile Subscriber<? super RedisMessage> _respSubscriber;
+    private volatile Subscriber<?> _inboundSubscriber;
     
     private static final AtomicIntegerFieldUpdater<DefaultRedisConnection> transactingUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultRedisConnection.class, "_isTransacting");
@@ -351,27 +361,25 @@ class DefaultRedisConnection
             final Observable<? extends RedisMessage> request,
             final Subscriber<? super RedisMessage> subscriber) {
         if (subscriber.isUnsubscribed()) {
-            LOG.info("response subscriber ({}) has been unsubscribed, ignore", 
-                    subscriber);
+            LOG.info("response subscriber ({}) has been unsubscribed, ignore", subscriber);
             return;
         }
-        if (holdRespSubscriber(subscriber)) {
-            // _respSubscriber field set to subscriber
+        if (holdInboundSubscriber(subscriber)) {
+            // _inboundSubscriber field set to subscriber
             final ChannelHandler handler = new SimpleChannelInboundHandler<RedisMessage>() {
                 @Override
                 protected void channelRead0(final ChannelHandlerContext ctx,
-                        final RedisMessage respmsg) throws Exception {
+                        final RedisMessage inmsg) throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelRead0 and call with msg({}).",
-                            ctx.channel(), ctx.name(), respmsg);
+                            ctx.channel(), ctx.name(), inmsg);
                     }
-                    _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
+                    _op.onInmsgRecvd(DefaultRedisConnection.this, subscriber, inmsg);
                 }};
             Nettys.applyHandler(this._channel.pipeline(), RedisHandlers.ON_MESSAGE, handler);
-            respHandlerUpdater.set(DefaultRedisConnection.this, handler);
+            setInboundHandler(handler);
             
-            reqSubscriptionUpdater.set(DefaultRedisConnection.this, 
-                    request.subscribe(buildRequestObserver(request)));
+            setOutboundSubscription(request.subscribe(buildOutboundObserver(request)));
             
             subscriber.add(Subscriptions.create(()->_op.doOnUnsubscribeResponse(this, subscriber)));
         } else {
@@ -380,8 +388,7 @@ class DefaultRedisConnection
         }
     }
 
-    private Observer<RedisMessage> buildRequestObserver(
-            final Observable<? extends RedisMessage> request) {
+    private Observer<RedisMessage> buildOutboundObserver(final Observable<? extends RedisMessage> request) {
         return new Observer<RedisMessage>() {
                 @Override
                 public void onCompleted() {
@@ -393,71 +400,67 @@ class DefaultRedisConnection
 
                 @Override
                 public void onError(final Throwable e) {
-                    LOG.warn("request {} invoke onError with ({}), try close connection: {}",
-                            request, ExceptionUtils.exception2detail(e), DefaultRedisConnection.this);
+                    if (!(e instanceof CloseException)) {
+                        LOG.warn("request {} invoke onError with ({}), try close connection: {}",
+                                request, ExceptionUtils.exception2detail(e), DefaultRedisConnection.this);
+                    }
                     fireClosed(e);
                 }
 
                 @Override
-                public void onNext(final RedisMessage reqmsg) {
-                    _op.requestOnNext(DefaultRedisConnection.this, reqmsg);
+                public void onNext(final RedisMessage outmsg) {
+                    _op.sendOutmsg(DefaultRedisConnection.this, outmsg);
                 }};
     }
 
-    private void requestOnNext(final RedisMessage reqmsg) {
+    private void doSendOutmsg(final RedisMessage outmsg) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("sending redis request msg {}", reqmsg);
+            LOG.debug("sending redis request msg {}", outmsg);
         }
         // set in transacting flag
         setTransacting();
-        this._channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
-        .addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
+        this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
+        .addListener(future -> {
                 if (future.isSuccess()) {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("send redis request msg {} success.", reqmsg);
+                        LOG.debug("send redis request msg {} success.", outmsg);
                     }
                 } else {
                     LOG.warn("exception when send redis req: {}, detail: {}",
-                            reqmsg, ExceptionUtils.exception2detail(future.cause()));
+                            outmsg, ExceptionUtils.exception2detail(future.cause()));
                     fireClosed(new TransportException("send reqmsg error", future.cause()));
                 }
-            }});
+            });
     }
 
-    private void responseOnNext(
+    private void processInmsg(
             final Subscriber<? super RedisMessage> subscriber,
-            final RedisMessage respmsg) {
-        if (unholdRespSubscriber(subscriber)) {
-            removeRespHandler();
+            final RedisMessage inmsg) {
+        if (unholdInboundSubscriber(subscriber)) {
+            removeInboundHandler();
             clearTransacting();
             try {
-                subscriber.onNext(respmsg);
+                subscriber.onNext(inmsg);
             } finally {
                 subscriber.onCompleted();
             }
         }
     }
 
-    private void doOnUnsubscribeResponse(
-            final Subscriber<? super RedisMessage> subscriber) {
-        if (unholdRespSubscriber(subscriber)) {
-            removeRespHandler();
+    private void doOnUnsubscribeResponse(final Subscriber<? super RedisMessage> subscriber) {
+        if (unholdInboundSubscriber(subscriber)) {
+            removeInboundHandler();
             // unsubscribe before OnCompleted or OnError
             fireClosed(new RuntimeException("unsubscribe response"));
         }
     }
 
-    private boolean holdRespSubscriber(
-            final Subscriber<? super RedisMessage> subscriber) {
-        return respSubscriberUpdater.compareAndSet(this, null, subscriber);
+    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
     }
 
-    private boolean unholdRespSubscriber(
-            final Subscriber<? super RedisMessage> subscriber) {
-        return respSubscriberUpdater.compareAndSet(this, subscriber, null);
+    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
     
     private void clearTransacting() {
