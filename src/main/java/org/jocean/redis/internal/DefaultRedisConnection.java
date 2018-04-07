@@ -254,14 +254,14 @@ class DefaultRedisConnection
                 final Observable<? extends RedisMessage> request,
                 final Subscriber<? super RedisMessage> subscriber);
         
+        public void doOnUnsubscribeResponse(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber);
+        
         public void onInmsgRecvd(
                 final DefaultRedisConnection connection,
                 final Subscriber<? super RedisMessage> subscriber,
                 final RedisMessage msg);
-        
-        public void doOnUnsubscribeResponse(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber);
         
         public void sendOutmsg(
                 final DefaultRedisConnection connection,
@@ -278,18 +278,18 @@ class DefaultRedisConnection
         }
         
         @Override
+        public void doOnUnsubscribeResponse(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber) {
+            connection.doOnUnsubscribeResponse(subscriber);
+        }
+        
+        @Override
         public void onInmsgRecvd(
                 final DefaultRedisConnection connection,
                 final Subscriber<? super RedisMessage> subscriber,
                 final RedisMessage inmsg) {
             connection.processInmsg(subscriber, inmsg);
-        }
-        
-        @Override
-        public void doOnUnsubscribeResponse(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber) {
-            connection.doOnUnsubscribeResponse(subscriber);
         }
         
         @Override
@@ -310,18 +310,18 @@ class DefaultRedisConnection
         }
         
         @Override
+        public void doOnUnsubscribeResponse(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber) {
+        }
+
+        @Override
         public void onInmsgRecvd(
                 final DefaultRedisConnection connection,
                 final Subscriber<? super RedisMessage> subscriber,
                 final RedisMessage msg) {
         }
         
-        @Override
-        public void doOnUnsubscribeResponse(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber) {
-        }
-
         @Override
         public void sendOutmsg(
                 final DefaultRedisConnection connection,
