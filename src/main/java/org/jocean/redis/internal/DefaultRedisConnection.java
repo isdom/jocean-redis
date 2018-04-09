@@ -174,15 +174,15 @@ class DefaultRedisConnection
         return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
     }
 
+    private void fireClosed(final Throwable e) {
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
+    }
+
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
             ((DefaultRedisConnection)args[0]).doClosed((Throwable)args[1]);
         }};
-
-    private void fireClosed(final Throwable e) {
-        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
-    }
 
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
@@ -212,26 +212,13 @@ class DefaultRedisConnection
     }
 
     private void setInboundHandler(final ChannelHandler handler) {
-        inboundHandlerUpdater.set(DefaultRedisConnection.this, handler);
+        inboundHandlerUpdater.set(this, handler);
     }
 
     private void removeInboundHandler() {
         final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
         if (null != handler) {
             Nettys.actionToRemoveHandler(this._channel, handler).call();
-        }
-    }
-
-    private void releaseInboundWithError(final Throwable e) {
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super RedisMessage> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
-        if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
-            try {
-                inboundSubscriber.onError(e);
-            } catch (final Exception error) {
-                LOG.warn("exception when invoke {}.onError, detail: {}",
-                    inboundSubscriber, ExceptionUtils.exception2detail(e));
-            }
         }
     }
 
@@ -247,87 +234,6 @@ class DefaultRedisConnection
     }
 
     private final Op _op;
-
-    protected interface Op {
-        public void subscribeResponse(
-                final DefaultRedisConnection connection,
-                final Observable<? extends RedisMessage> request,
-                final Subscriber<? super RedisMessage> subscriber);
-
-        public void doOnUnsubscribeResponse(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber);
-
-        public void onInmsgRecvd(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber,
-                final RedisMessage msg);
-
-        public void sendOutmsg(
-                final DefaultRedisConnection connection,
-                final RedisMessage msg);
-    }
-
-    private static final Op OP_ACTIVE = new Op() {
-        @Override
-        public void subscribeResponse(
-                final DefaultRedisConnection connection,
-                final Observable<? extends RedisMessage> request,
-                final Subscriber<? super RedisMessage> subscriber) {
-            connection.subscribeResponse(request, subscriber);
-        }
-
-        @Override
-        public void doOnUnsubscribeResponse(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber) {
-            connection.doOnUnsubscribeResponse(subscriber);
-        }
-
-        @Override
-        public void onInmsgRecvd(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber,
-                final RedisMessage inmsg) {
-            connection.processInmsg(subscriber, inmsg);
-        }
-
-        @Override
-        public void sendOutmsg(
-                final DefaultRedisConnection connection,
-                final RedisMessage msg) {
-            connection.doSendOutmsg(msg);
-        }
-    };
-
-    private static final Op OP_UNACTIVE = new Op() {
-        @Override
-        public void subscribeResponse(
-                final DefaultRedisConnection connection,
-                final Observable<? extends RedisMessage> request,
-                final Subscriber<? super RedisMessage> subscriber) {
-            subscriber.onError(new RuntimeException("redis connection unactive."));
-        }
-
-        @Override
-        public void doOnUnsubscribeResponse(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber) {
-        }
-
-        @Override
-        public void onInmsgRecvd(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber,
-                final RedisMessage msg) {
-        }
-
-        @Override
-        public void sendOutmsg(
-                final DefaultRedisConnection connection,
-                final RedisMessage msg) {
-        }
-    };
 
     private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, ChannelHandler.class, "_inboundHandler");
@@ -463,6 +369,19 @@ class DefaultRedisConnection
         return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
 
+    private void releaseInboundWithError(final Throwable e) {
+        @SuppressWarnings("unchecked")
+        final Subscriber<? super RedisMessage> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
+        if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
+            try {
+                inboundSubscriber.onError(e);
+            } catch (final Exception error) {
+                LOG.warn("exception when invoke {}.onError, detail: {}",
+                    inboundSubscriber, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
     private void clearTransacting() {
         transactingUpdater.compareAndSet(DefaultRedisConnection.this, 1, 0);
     }
@@ -471,4 +390,85 @@ class DefaultRedisConnection
         // TODO, using this field as counter for req redis count & resp redis count
         transactingUpdater.compareAndSet(DefaultRedisConnection.this, 0, 1);
     }
+
+    protected interface Op {
+        public void subscribeResponse(
+                final DefaultRedisConnection connection,
+                final Observable<? extends RedisMessage> request,
+                final Subscriber<? super RedisMessage> subscriber);
+
+        public void doOnUnsubscribeResponse(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber);
+
+        public void onInmsgRecvd(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber,
+                final RedisMessage msg);
+
+        public void sendOutmsg(
+                final DefaultRedisConnection connection,
+                final RedisMessage msg);
+    }
+
+    private static final Op OP_ACTIVE = new Op() {
+        @Override
+        public void subscribeResponse(
+                final DefaultRedisConnection connection,
+                final Observable<? extends RedisMessage> request,
+                final Subscriber<? super RedisMessage> subscriber) {
+            connection.subscribeResponse(request, subscriber);
+        }
+
+        @Override
+        public void doOnUnsubscribeResponse(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber) {
+            connection.doOnUnsubscribeResponse(subscriber);
+        }
+
+        @Override
+        public void onInmsgRecvd(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber,
+                final RedisMessage inmsg) {
+            connection.processInmsg(subscriber, inmsg);
+        }
+
+        @Override
+        public void sendOutmsg(
+                final DefaultRedisConnection connection,
+                final RedisMessage msg) {
+            connection.doSendOutmsg(msg);
+        }
+    };
+
+    private static final Op OP_UNACTIVE = new Op() {
+        @Override
+        public void subscribeResponse(
+                final DefaultRedisConnection connection,
+                final Observable<? extends RedisMessage> request,
+                final Subscriber<? super RedisMessage> subscriber) {
+            subscriber.onError(new RuntimeException("redis connection unactive."));
+        }
+
+        @Override
+        public void doOnUnsubscribeResponse(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber) {
+        }
+
+        @Override
+        public void onInmsgRecvd(
+                final DefaultRedisConnection connection,
+                final Subscriber<? super RedisMessage> subscriber,
+                final RedisMessage msg) {
+        }
+
+        @Override
+        public void sendOutmsg(
+                final DefaultRedisConnection connection,
+                final RedisMessage msg) {
+        }
+    };
 }
