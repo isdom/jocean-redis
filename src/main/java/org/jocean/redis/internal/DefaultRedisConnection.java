@@ -44,57 +44,6 @@ class DefaultRedisConnection
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultRedisConnection.class);
 
-    private static final AtomicInteger _IDSRC = new AtomicInteger(0);
-
-    private final int _id = _IDSRC.getAndIncrement();
-
-    @Override
-    public int compareTo(final DefaultRedisConnection o) {
-        return this._id - o._id;
-    }
-
-    /* (non-Javadoc)
-     * @see java.lang.Object#hashCode()
-     */
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + this._id;
-        return result;
-    }
-
-    /* (non-Javadoc)
-     * @see java.lang.Object#equals(java.lang.Object)
-     */
-    @Override
-    public boolean equals(final Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        final DefaultRedisConnection other = (DefaultRedisConnection) obj;
-        if (this._id != other._id)
-            return false;
-        return true;
-    }
-
-    @Override
-    public String toString() {
-        final StringBuilder builder = new StringBuilder();
-        builder.append("DefaultRedisConnection [create at:")
-                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", isActive=").append(isActive())
-                .append(", isTransacting=").append(isTransacting())
-                .append(", outboundSubscription=").append(_outboundSubscription)
-                .append(", inboundSubscriber=").append(_inboundSubscriber)
-                .append(", channel=").append(_channel)
-                .append("]");
-        return builder.toString();
-    }
-
     private final InterfaceSelector _selector = new InterfaceSelector();
 
     @SafeVarargs
@@ -102,9 +51,11 @@ class DefaultRedisConnection
         final Channel channel,
         final Action1<RedisConnection> ... onTerminates) {
 
-        this._channel = channel;
         this._terminateAwareSupport =
             new TerminateAwareSupport<RedisConnection>(this._selector);
+
+        this._channel = channel;
+        this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
 
         Nettys.applyToChannel(onTerminate(),
                 channel,
@@ -116,8 +67,6 @@ class DefaultRedisConnection
                 RedisHandlers.ON_CHANNEL_INACTIVE,
                 (Action0)()->fireClosed(new TransportException("channelInactive of " + channel)));
 
-        this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
-
         for (final Action1<RedisConnection> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
         }
@@ -126,22 +75,13 @@ class DefaultRedisConnection
         }
     }
 
-    Channel channel() {
-        return this._channel;
-    }
-
-    boolean isTransacting() {
-        return 1 == transactingUpdater.get(this);
-    }
+    private final Op _op;
+    private final Channel _channel;
+    private final TerminateAwareSupport<RedisConnection> _terminateAwareSupport;
 
     @Override
-    public Observable<? extends RedisMessage> defineInteraction(final Observable<? extends RedisMessage> request) {
-        return Observable.unsafeCreate(subscriber->this._op.subscribeResponse(this, request, subscriber));
-    }
-
-    @Override
-    public boolean isActive() {
-        return this._selector.isActive();
+    public void close() {
+        fireClosed(new CloseException());
     }
 
     @Override
@@ -149,9 +89,8 @@ class DefaultRedisConnection
         return ()->close();
     }
 
-    @Override
-    public void close() {
-        fireClosed(new CloseException());
+    Channel channel() {
+        return this._channel;
     }
 
     @Override
@@ -172,6 +111,40 @@ class DefaultRedisConnection
     @Override
     public Action0 doOnTerminate(final Action1<RedisConnection> onTerminate) {
         return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
+    }
+
+    boolean isTransacting() {
+        return 1 == transactingUpdater.get(this);
+    }
+
+    @Override
+    public Observable<? extends RedisMessage> defineInteraction(final Observable<? extends RedisMessage> request) {
+        return Observable.unsafeCreate(subscriber->this._op.subscribeResponse(this, request, subscriber));
+    }
+
+    @Override
+    public boolean isActive() {
+        return this._selector.isActive();
+    }
+
+    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
+    }
+
+    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
+    }
+
+    private void releaseInboundWithError(final Throwable error) {
+        final Subscriber<?> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
+        if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
+            try {
+                inboundSubscriber.onError(error);
+            } catch (final Exception e) {
+                LOG.warn("exception when invoke {}.onError, detail: {}",
+                    inboundSubscriber, ExceptionUtils.exception2detail(e));
+            }
+        }
     }
 
     private void fireClosed(final Throwable e) {
@@ -233,8 +206,6 @@ class DefaultRedisConnection
         }
     }
 
-    private final Op _op;
-
     private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, ChannelHandler.class, "_inboundHandler");
 
@@ -258,9 +229,6 @@ class DefaultRedisConnection
     @SuppressWarnings("unused")
     private volatile int _isTransacting = 0;
 
-    private final TerminateAwareSupport<RedisConnection> _terminateAwareSupport;
-
-    private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
 
     private void subscribeResponse(
@@ -361,27 +329,6 @@ class DefaultRedisConnection
         }
     }
 
-    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
-        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
-    }
-
-    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
-        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
-    }
-
-    private void releaseInboundWithError(final Throwable e) {
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super RedisMessage> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
-        if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
-            try {
-                inboundSubscriber.onError(e);
-            } catch (final Exception error) {
-                LOG.warn("exception when invoke {}.onError, detail: {}",
-                    inboundSubscriber, ExceptionUtils.exception2detail(e));
-            }
-        }
-    }
-
     private void clearTransacting() {
         transactingUpdater.compareAndSet(DefaultRedisConnection.this, 1, 0);
     }
@@ -471,4 +418,55 @@ class DefaultRedisConnection
                 final RedisMessage msg) {
         }
     };
+
+    private static final AtomicInteger _IDSRC = new AtomicInteger(0);
+
+    private final int _id = _IDSRC.getAndIncrement();
+
+    @Override
+    public int compareTo(final DefaultRedisConnection o) {
+        return this._id - o._id;
+    }
+
+    /* (non-Javadoc)
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + this._id;
+        return result;
+    }
+
+    /* (non-Javadoc)
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        final DefaultRedisConnection other = (DefaultRedisConnection) obj;
+        if (this._id != other._id)
+            return false;
+        return true;
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder builder = new StringBuilder();
+        builder.append("DefaultRedisConnection [create at:")
+                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
+                .append(", isActive=").append(isActive())
+                .append(", isTransacting=").append(isTransacting())
+                .append(", outboundSubscription=").append(_outboundSubscription)
+                .append(", inboundSubscriber=").append(_inboundSubscriber)
+                .append(", channel=").append(_channel)
+                .append("]");
+        return builder.toString();
+    }
 }
