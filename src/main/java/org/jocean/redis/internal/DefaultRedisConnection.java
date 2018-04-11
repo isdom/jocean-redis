@@ -155,7 +155,8 @@ class DefaultRedisConnection
         @Override
         public void call(final Object... args) {
             ((DefaultRedisConnection)args[0]).doClosed((Throwable)args[1]);
-        }};
+        }
+    };
 
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
@@ -195,6 +196,35 @@ class DefaultRedisConnection
         }
     }
 
+    private void doSetOutbound(final Observable<? extends RedisMessage> request) {
+        setOutboundSubscription(request.subscribe(buildOutboundObserver(request)));
+    }
+
+    private Observer<RedisMessage> buildOutboundObserver(final Observable<? extends RedisMessage> request) {
+        return new Observer<RedisMessage>() {
+                @Override
+                public void onCompleted() {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("request {} invoke onCompleted for connection: {}",
+                            request, DefaultRedisConnection.this);
+                    }
+                }
+
+                @Override
+                public void onError(final Throwable e) {
+                    if (!(e instanceof CloseException)) {
+                        LOG.warn("request {} invoke onError with ({}), try close connection: {}",
+                                request, ExceptionUtils.exception2detail(e), DefaultRedisConnection.this);
+                    }
+                    fireClosed(e);
+                }
+
+                @Override
+                public void onNext(final RedisMessage outmsg) {
+                    _op.sendOutmsg(DefaultRedisConnection.this, outmsg);
+                }};
+    }
+
     private void setOutboundSubscription(final Subscription subscription) {
         outboundSubscriptionUpdater.set(this, subscription);
     }
@@ -206,6 +236,12 @@ class DefaultRedisConnection
         }
     }
 
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscriber> inboundSubscriberUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscriber.class, "_inboundSubscriber");
+
+    private volatile Subscriber<?> _inboundSubscriber;
+
     private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, ChannelHandler.class, "_inboundHandler");
 
@@ -216,12 +252,6 @@ class DefaultRedisConnection
             AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscription.class, "_outboundSubscription");
 
     private volatile Subscription _outboundSubscription;
-
-    @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscriber> inboundSubscriberUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscriber.class, "_inboundSubscriber");
-
-    private volatile Subscriber<?> _inboundSubscriber;
 
     private static final AtomicIntegerFieldUpdater<DefaultRedisConnection> transactingUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultRedisConnection.class, "_isTransacting");
@@ -253,38 +283,13 @@ class DefaultRedisConnection
             Nettys.applyHandler(this._channel.pipeline(), RedisHandlers.ON_MESSAGE, handler);
             setInboundHandler(handler);
 
-            setOutboundSubscription(request.subscribe(buildOutboundObserver(request)));
+            doSetOutbound(request);
 
             subscriber.add(Subscriptions.create(()->_op.doOnUnsubscribeResponse(this, subscriber)));
         } else {
             // _respSubscriber field has already setted
             subscriber.onError(new RuntimeException("response subscriber already setted."));
         }
-    }
-
-    private Observer<RedisMessage> buildOutboundObserver(final Observable<? extends RedisMessage> request) {
-        return new Observer<RedisMessage>() {
-                @Override
-                public void onCompleted() {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("request {} invoke onCompleted for connection: {}",
-                            request, DefaultRedisConnection.this);
-                    }
-                }
-
-                @Override
-                public void onError(final Throwable e) {
-                    if (!(e instanceof CloseException)) {
-                        LOG.warn("request {} invoke onError with ({}), try close connection: {}",
-                                request, ExceptionUtils.exception2detail(e), DefaultRedisConnection.this);
-                    }
-                    fireClosed(e);
-                }
-
-                @Override
-                public void onNext(final RedisMessage outmsg) {
-                    _op.sendOutmsg(DefaultRedisConnection.this, outmsg);
-                }};
     }
 
     private void doSendOutmsg(final RedisMessage outmsg) {
