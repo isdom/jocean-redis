@@ -197,30 +197,32 @@ class DefaultRedisConnection
     }
 
     private void doSetOutbound(final Observable<? extends RedisMessage> request) {
-        setOutboundSubscription(request.subscribe(buildOutboundObserver(request)));
+        setOutboundSubscription(request.subscribe(buildOutboundObserver()));
     }
 
-    private Observer<RedisMessage> buildOutboundObserver(final Observable<? extends RedisMessage> request) {
+    private Observer<RedisMessage> buildOutboundObserver() {
         return new Observer<RedisMessage>() {
                 @Override
                 public void onCompleted() {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("request {} invoke onCompleted for connection: {}",
-                            request, DefaultRedisConnection.this);
+                        LOG.debug("outound invoke onCompleted for connection: {}", DefaultRedisConnection.this);
                     }
                 }
 
                 @Override
                 public void onError(final Throwable e) {
                     if (!(e instanceof CloseException)) {
-                        LOG.warn("request {} invoke onError with ({}), try close connection: {}",
-                                request, ExceptionUtils.exception2detail(e), DefaultRedisConnection.this);
+                        LOG.warn("outound invoke onError with ({}), try close connection: {}",
+                                ExceptionUtils.exception2detail(e), DefaultRedisConnection.this);
                     }
                     fireClosed(e);
                 }
 
                 @Override
                 public void onNext(final RedisMessage outmsg) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("outbound invoke onNext({}) for connection: {}", outmsg, DefaultRedisConnection.this);
+                    }
                     _op.sendOutmsg(DefaultRedisConnection.this, outmsg);
                 }};
     }
