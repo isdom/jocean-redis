@@ -169,52 +169,42 @@ public class RedisUtil {
             };
     }
 
-    @SuppressWarnings("finally")
     public static Transformer<? super RedisConnection, ? extends RedisConnection> authRedis(final String passwd) {
         return source->{
                 if (null == passwd || (null != passwd && passwd.isEmpty())) {
                     return source;
                 } else {
                     return source.flatMap(conn->conn.defineInteraction(cmdAuth(passwd))
-                        .map(resp->{
-                                if (LOG.isDebugEnabled()) {
-                                    LOG.debug("receive redis resp[{}] for auth", resp);
-                                }
-                                if (isOK(resp)) {
-                                    return conn;
-                                } else {
-                                    try {
-                                        // close redis connection first
-                                        conn.close();
-                                    } finally {
-                                        throw new RuntimeException("Auth Failed");
-                                    }
-                                }
-                            })
+                        .map(checkRespAndPushConnection(conn, "Auth Failed"))
                     );
                 }
         };
     }
 
-    @SuppressWarnings("finally")
     public static Transformer<? super RedisConnection, ? extends RedisConnection> selectDB(final int dbno) {
         return source->source.flatMap(conn->conn.defineInteraction(cmdSelect(dbno))
-                        .map(resp->{
-                                if (LOG.isDebugEnabled()) {
-                                    LOG.debug("receive redis resp[{}] for select", resp);
-                                }
-                                if (isOK(resp)) {
-                                    return conn;
-                                } else {
-                                    try {
-                                        // close redis connection first
-                                        conn.close();
-                                    } finally {
-                                        throw new RuntimeException("Select Failed");
-                                    }
-                                }
-                            })
-                    );
+            .map(checkRespAndPushConnection(conn, "Select Failed"))
+        );
+    }
+
+    @SuppressWarnings("finally")
+    private static Func1<RedisMessage, ? extends RedisConnection> checkRespAndPushConnection(final RedisConnection conn,
+            final String errMsg) {
+        return resp->{
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("receive redis resp[{}]", resp);
+                }
+                if (isOK(resp)) {
+                    return conn;
+                } else {
+                    try {
+                        // close redis connection first
+                        conn.close();
+                    } finally {
+                        throw new RuntimeException(errMsg);
+                    }
+                }
+            };
     }
 
     public static Transformer<? super RedisConnection, ? extends RedisMessage>
@@ -222,12 +212,12 @@ public class RedisUtil {
                 @SuppressWarnings("unchecked")
                 final Func1<RedisMessage, Observable<RedisMessage>>... extras) {
         return source->source.flatMap(conn -> {
-                        Observable<? extends RedisMessage> resp = conn.defineInteraction(first);
-                        for (final Func1<RedisMessage, Observable<RedisMessage>> next : extras ) {
-                            resp = resp.flatMap(msg->conn.defineInteraction(next.call(msg)));
-                        }
-                        return resp.doAfterTerminate(conn.closer());
-                    });
+                    Observable<? extends RedisMessage> resp = conn.defineInteraction(first);
+                    for (final Func1<RedisMessage, Observable<RedisMessage>> next : extras ) {
+                        resp = resp.flatMap(msg->conn.defineInteraction(next.call(msg)));
+                    }
+                    return resp.doAfterTerminate(conn.closer());
+                });
     }
 
     public static String dumpAggregatedRedisMessage(final RedisMessage msg) {
