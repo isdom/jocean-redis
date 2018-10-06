@@ -18,5 +18,5 @@ dependencies {
     compile 'org.jocean:jocean-http:0.0.2-SNAPSHOT'
     
 	testCompile 'junit:junit:4.12'
-    testCompile 'ch.qos.logback:logback-classic:1.2.2'
+    testCompile 'ch.qos.logback:logback-classic:1.2.3'
 }
