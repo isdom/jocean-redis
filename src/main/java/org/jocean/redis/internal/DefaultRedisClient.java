@@ -1,14 +1,14 @@
 /**
- * 
+ *
  */
 package org.jocean.redis.internal;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.client.impl.AbstractChannelCreator;
-import org.jocean.http.client.impl.ChannelCreator;
-import org.jocean.http.client.impl.ChannelPool;
-import org.jocean.http.client.impl.DefaultChannelPool;
+import org.jocean.http.client.internal.AbstractChannelCreator;
+import org.jocean.http.client.internal.ChannelCreator;
+import org.jocean.http.client.internal.ChannelPool;
+import org.jocean.http.client.internal.DefaultChannelPool;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.redis.RedisClient;
@@ -34,17 +34,17 @@ import rx.functions.Func1;
  *
  */
 public class DefaultRedisClient implements RedisClient {
-    
+
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
             InternalLoggerFactory.setDefaultFactory(Slf4JLoggerFactory.INSTANCE);
         }
     }
-    
+
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultRedisClient.class);
-    
+
     private final static Action1<Channel> ADD_CODEC_AND_SET_READY = new Action1<Channel>() {
         @Override
         public void call(final Channel channel) {
@@ -55,7 +55,7 @@ public class DefaultRedisClient implements RedisClient {
             Nettys.applyHandler(p, RedisHandlers.REDIS_ENCODER);
             Nettys.setChannelReady(channel);
         }};
-        
+
     private final Action1<RedisConnection> _doRecycleChannel = new Action1<RedisConnection>() {
         @Override
         public void call(final RedisConnection c) {
@@ -72,20 +72,20 @@ public class DefaultRedisClient implements RedisClient {
                 LOG.info("close transactioning redis channel: {}", channel);
             }
         }};
-        
+
     final Func1<Channel, RedisConnection> _channel2Connection = new Func1<Channel, RedisConnection>() {
         @Override
         public RedisConnection call(final Channel channel) {
             return new DefaultRedisConnection(channel, _doRecycleChannel);
         }};
-            
+
     @Override
     public Observable<? extends RedisConnection> getConnection() {
-        return null == this._defaultRemoteAddress 
+        return null == this._defaultRemoteAddress
                 ? Observable.<RedisConnection>error(new RuntimeException("No Default Redis Server"))
                 : getConnection(this._defaultRemoteAddress);
     }
-    
+
     @Override
     public Observable<? extends RedisConnection> getConnection(final SocketAddress remoteAddress) {
         return this._channelPool.retainChannel(remoteAddress)
@@ -106,11 +106,11 @@ public class DefaultRedisClient implements RedisClient {
             return ret;
         }
     }
-    
+
     public DefaultRedisClient() {
         this(0);
     }
-    
+
     public DefaultRedisClient(final int processThreadNumber) {
         this(new AbstractChannelCreator() {
             @Override
@@ -121,10 +121,10 @@ public class DefaultRedisClient implements RedisClient {
             }},
             new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
-    
+
     public DefaultRedisClient(
             final EventLoopGroup eventLoopGroup,
-            final Class<? extends Channel> channelType) { 
+            final Class<? extends Channel> channelType) {
         this(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -132,10 +132,10 @@ public class DefaultRedisClient implements RedisClient {
             }},
             new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
-    
+
     public DefaultRedisClient(
             final EventLoopGroup eventLoopGroup,
-            final ChannelFactory<? extends Channel> channelFactory) { 
+            final ChannelFactory<? extends Channel> channelFactory) {
         this(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -143,33 +143,33 @@ public class DefaultRedisClient implements RedisClient {
             }},
             new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
-    
+
     public DefaultRedisClient(
             final ChannelCreator channelCreator) {
         this(channelCreator, new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
-    
+
     public DefaultRedisClient(
             final ChannelCreator channelCreator,
             final ChannelPool channelPool) {
         this._channelCreator = channelCreator;
         this._channelPool = channelPool;
     }
-    
+
     @Override
     public void close() {
         // Shut down executor threads to exit.
         this._channelCreator.close();
     }
-    
+
     public void setFornew(final Transformer<? super RedisConnection, ? extends RedisConnection> fornew) {
         this._fornew = fornew;
     }
-    
+
     public void setDefaultRedisServer(final SocketAddress defaultRedisServerAddr) {
         this._defaultRemoteAddress = defaultRedisServerAddr;
     }
-    
+
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
     private volatile SocketAddress _defaultRemoteAddress;
