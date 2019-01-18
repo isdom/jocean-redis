@@ -136,8 +136,7 @@ public class RedisUtil {
     }
 
     public static FullBulkStringRedisMessage str2bulk(final String str) {
-        return new FullBulkStringRedisMessage(
-            Unpooled.wrappedBuffer(str.getBytes(CharsetUtil.UTF_8)));
+        return new FullBulkStringRedisMessage(Unpooled.wrappedBuffer(str.getBytes(CharsetUtil.UTF_8)));
     }
 
     public static boolean isOK(final RedisMessage message) {
@@ -208,10 +207,10 @@ public class RedisUtil {
     }
 
     public static Transformer<? super RedisConnection, ? extends RedisMessage>
-        interactWithRedis(final Observable<RedisMessage> first,
+        interacts(final Observable<RedisMessage> first,
                 @SuppressWarnings("unchecked")
                 final Func1<RedisMessage, Observable<RedisMessage>>... extras) {
-        return source->source.flatMap(conn -> {
+        return getconn->getconn.flatMap(conn -> {
                     Observable<? extends RedisMessage> resp = conn.defineInteraction(first);
                     for (final Func1<RedisMessage, Observable<RedisMessage>> next : extras ) {
                         resp = resp.flatMap(msg->conn.defineInteraction(next.call(msg)));
