@@ -45,39 +45,15 @@ public class DefaultRedisClient implements RedisClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultRedisClient.class);
 
-    private final static Action1<Channel> ADD_CODEC_AND_SET_READY = new Action1<Channel>() {
-        @Override
-        public void call(final Channel channel) {
+    private final static Action1<Channel> ADD_CODEC_AND_SET_READY = channel -> {
             final ChannelPipeline p = channel.pipeline();
+            Nettys.applyHandler(p, RedisHandlers.LOGGING);
             Nettys.applyHandler(p, RedisHandlers.REDIS_DECODER);
             Nettys.applyHandler(p, RedisHandlers.REDIS_BULKSTRING_AGGREGATOR);
             Nettys.applyHandler(p, RedisHandlers.REDIS_ARRAY_AGGREGATOR);
             Nettys.applyHandler(p, RedisHandlers.REDIS_ENCODER);
             Nettys.setChannelReady(channel);
-        }};
-
-    private final Action1<RedisConnection> _doRecycleChannel = new Action1<RedisConnection>() {
-        @Override
-        public void call(final RedisConnection c) {
-            final DefaultRedisConnection connection = (DefaultRedisConnection)c;
-            final Channel channel = connection.channel();
-            if (!connection.isTransacting()) {
-                if (_channelPool.recycleChannel(channel)) {
-                    // recycle success
-                    // perform read for recv FIN SIG and to change state to close
-                    channel.read();
-                }
-            } else {
-                channel.close();
-                LOG.info("close transactioning redis channel: {}", channel);
-            }
-        }};
-
-    final Func1<Channel, RedisConnection> _channel2Connection = new Func1<Channel, RedisConnection>() {
-        @Override
-        public RedisConnection call(final Channel channel) {
-            return new DefaultRedisConnection(channel, _doRecycleChannel);
-        }};
+        };
 
     @Override
     public Observable<? extends RedisConnection> getConnection() {
@@ -154,6 +130,22 @@ public class DefaultRedisClient implements RedisClient {
             final ChannelPool channelPool) {
         this._channelCreator = channelCreator;
         this._channelPool = channelPool;
+        this._doRecycleChannel = c -> {
+            final DefaultRedisConnection connection = (DefaultRedisConnection)c;
+            final Channel channel = connection.channel();
+            if (!connection.isTransacting()) {
+                if (_channelPool.recycleChannel(channel)) {
+                    // recycle success
+                    // perform read for recv FIN SIG and to change state to close
+                    channel.read();
+                }
+            } else {
+                channel.close();
+                LOG.info("close transactioning redis channel: {}", channel);
+            }
+        };
+
+        this._channel2Connection = channel -> new DefaultRedisConnection(channel, _doRecycleChannel);
     }
 
     @Override
@@ -171,6 +163,9 @@ public class DefaultRedisClient implements RedisClient {
     }
 
     private final ChannelPool _channelPool;
+    private final Action1<RedisConnection> _doRecycleChannel;
+    private final Func1<Channel, RedisConnection> _channel2Connection;
+
     private final ChannelCreator _channelCreator;
     private volatile SocketAddress _defaultRemoteAddress;
     private volatile Transformer<? super RedisConnection, ? extends RedisConnection> _fornew = null;
