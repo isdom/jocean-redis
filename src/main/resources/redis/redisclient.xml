@@ -11,13 +11,11 @@
                 factory-method="composite">
                 <constructor-arg>
                     <list>
-			            <bean class="org.jocean.redis.RedisUtil"
-			                factory-method="authRedis">
+			            <bean class="org.jocean.redis.RedisUtil" factory-method="authRedis">
 			                <constructor-arg name="passwd" value="${redis.server.passwd:}"/>
 			            </bean>
-                        <bean class="org.jocean.redis.RedisUtil"
-                            factory-method="selectDB">
-                            <constructor-arg name="dbno" value="${redis.server.dbno}"/>
+                        <bean class="org.jocean.redis.RedisUtil" factory-method="selectDB">
+                            <constructor-arg name="dbno" value="${redis.server.dbno:0}"/>
                         </bean>
                     </list>
                 </constructor-arg>
@@ -32,5 +30,6 @@
             </bean>
         </property>
     </bean>
+    <alias name="redisClient" alias="${redis.name:redis.default}"/>
      
 </beans>
