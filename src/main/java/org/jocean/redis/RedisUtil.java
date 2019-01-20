@@ -150,6 +150,10 @@ public class RedisUtil {
         return false;
     }
 
+    public static boolean isNull(final RedisMessage message) {
+        return (message instanceof FullBulkStringRedisMessage) ? ((FullBulkStringRedisMessage)message).isNull() : false;
+    }
+
     public static Func1<RedisMessage, Observable<RedisMessage>> ifOKThenElse(
             final Observable<RedisMessage> thenRequest,
             final Observable<RedisMessage> elseRequest) {
