@@ -123,6 +123,14 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array(cmds.toArray(new String[0])));
     }
 
+    public static Observable<RedisMessage> cmdIncr(final String key) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("INCR", key));
+    }
+
+    public static Observable<RedisMessage> cmdDecr(final String key) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("DECR", key));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
