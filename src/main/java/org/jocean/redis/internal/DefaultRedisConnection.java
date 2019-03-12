@@ -12,9 +12,9 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.CloseException;
 import org.jocean.http.TransportException;
 import org.jocean.http.util.Nettys;
+import org.jocean.idiom.EndAwareSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
-import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.redis.RedisClient.RedisConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,8 +38,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultRedisConnection
-    implements RedisConnection, Comparable<DefaultRedisConnection>  {
+class DefaultRedisConnection implements RedisConnection, Comparable<DefaultRedisConnection>  {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultRedisConnection.class);
@@ -47,28 +46,25 @@ class DefaultRedisConnection
     private final InterfaceSelector _selector = new InterfaceSelector();
 
     @SafeVarargs
-    DefaultRedisConnection(
-        final Channel channel,
-        final Action1<RedisConnection> ... onTerminates) {
+    DefaultRedisConnection(final Channel channel, final Action1<RedisConnection> ... onEnds) {
 
-        this._terminateAwareSupport =
-            new TerminateAwareSupport<RedisConnection>(this._selector);
+        this._endSupport = new EndAwareSupport<RedisConnection>(this._selector);
 
         this._channel = channel;
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
 
-        Nettys.applyToChannel(onTerminate(),
+        Nettys.applyToChannel(onEnd(),
                 channel,
                 RedisHandlers.ON_EXCEPTION_CAUGHT,
                 (Action1<Throwable>)cause->fireClosed(cause));
 
-        Nettys.applyToChannel(onTerminate(),
+        Nettys.applyToChannel(onEnd(),
                 channel,
                 RedisHandlers.ON_CHANNEL_INACTIVE,
                 (Action0)()->fireClosed(new TransportException("channelInactive of " + channel)));
 
-        for (final Action1<RedisConnection> onTerminate : onTerminates) {
-            doOnTerminate(onTerminate);
+        for (final Action1<RedisConnection> onend : onEnds) {
+            doOnEnd(onend);
         }
         if (!channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
@@ -77,7 +73,7 @@ class DefaultRedisConnection
 
     private final Op _op;
     private final Channel _channel;
-    private final TerminateAwareSupport<RedisConnection> _terminateAwareSupport;
+    private final EndAwareSupport<RedisConnection> _endSupport;
 
     @Override
     public void close() {
@@ -94,23 +90,23 @@ class DefaultRedisConnection
     }
 
     @Override
-    public Action1<Action0> onTerminate() {
-        return  this._terminateAwareSupport.onTerminate(this);
+    public Action1<Action0> onEnd() {
+        return  this._endSupport.onEnd(this);
     }
 
     @Override
-    public Action1<Action1<RedisConnection>> onTerminateOf() {
-        return  this._terminateAwareSupport.onTerminateOf(this);
+    public Action1<Action1<RedisConnection>> onEndOf() {
+        return  this._endSupport.onEndOf(this);
     }
 
     @Override
-    public Action0 doOnTerminate(final Action0 onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
+    public Action0 doOnEnd(final Action0 onend) {
+        return this._endSupport.doOnEnd(this, onend);
     }
 
     @Override
-    public Action0 doOnTerminate(final Action1<RedisConnection> onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
+    public Action0 doOnEnd(final Action1<RedisConnection> onend) {
+        return this._endSupport.doOnEnd(this, onend);
     }
 
     boolean isTransacting() {
@@ -172,7 +168,7 @@ class DefaultRedisConnection
 
         unsubscribeOutbound();
 
-        this._terminateAwareSupport.fireAllTerminates(this);
+        this._endSupport.fireAllActions(this);
     }
 
     private static String errorAsString(final Throwable e) {
