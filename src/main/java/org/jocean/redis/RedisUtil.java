@@ -127,8 +127,16 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("INCR", key));
     }
 
+    public static Observable<RedisMessage> cmdIncrBy(final String key, final long increment) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("INCRBY", key, Long.toString(increment)));
+    }
+
     public static Observable<RedisMessage> cmdDecr(final String key) {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("DECR", key));
+    }
+
+    public static Observable<RedisMessage> cmdDecrBy(final String key, final long decrement) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("DECRBY", key, Long.toString(decrement)));
     }
 
     public static Observable<RedisMessage> error(final String errorMessage) {
