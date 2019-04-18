@@ -29,8 +29,7 @@ import rx.functions.Func1;
  *
  */
 public class RedisUtil {
-    private static final Logger LOG =
-            LoggerFactory.getLogger(RedisUtil.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RedisUtil.class);
 
     public static final String REDIS_OK = "OK";
 
@@ -137,6 +136,14 @@ public class RedisUtil {
 
     public static Observable<RedisMessage> cmdDecrBy(final String key, final long decrement) {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("DECRBY", key, Long.toString(decrement)));
+    }
+
+    public static Observable<RedisMessage> cmdExpire(final String key, final int seconds) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("EXPIRE", key, Integer.toString(seconds)));
+    }
+
+    public static Observable<RedisMessage> cmdExpireAt(final String key, final long unixTimestampInSeconds) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("EXPIREAT", key, Long.toString(unixTimestampInSeconds)));
     }
 
     public static Observable<RedisMessage> error(final String errorMessage) {
