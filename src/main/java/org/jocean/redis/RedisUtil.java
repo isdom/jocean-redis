@@ -146,6 +146,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("EXPIREAT", key, Long.toString(unixTimestampInSeconds)));
     }
 
+    public static Observable<RedisMessage> cmdExists(final String key) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("EXISTS", key));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
