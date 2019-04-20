@@ -115,6 +115,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("GET", key));
     }
 
+    public static Observable<RedisMessage> cmdGetSet(final String key, final String value) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("GETSET", key, value));
+    }
+
     public static Observable<RedisMessage> cmdDel(final String... keys) {
         final List<String> cmds = new ArrayList<>();
         cmds.add("DEL");
