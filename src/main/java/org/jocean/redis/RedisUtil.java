@@ -119,6 +119,13 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("GETSET", key, value));
     }
 
+    public static Observable<RedisMessage> cmdMGet(final String ...keys) {
+        final String[] cmds = new String[keys.length + 1];
+        cmds[0] = "MGET";
+        System.arraycopy(keys, 0, cmds, 1, keys.length);
+        return Observable.<RedisMessage>just(RedisUtil.strs2array(cmds));
+    }
+
     public static Observable<RedisMessage> cmdDel(final String... keys) {
         final List<String> cmds = new ArrayList<>();
         cmds.add("DEL");
