@@ -130,6 +130,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("APPEND", key, value));
     }
 
+    public static Observable<RedisMessage> cmdStrlen(final String key) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("STRLEN", key));
+    }
+
     public static Observable<RedisMessage> cmdDel(final String... keys) {
         final List<String> cmds = new ArrayList<>();
         cmds.add("DEL");
