@@ -134,6 +134,14 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("STRLEN", key));
     }
 
+    public static Observable<RedisMessage> cmdGetRange(final String key, final int start, final int end) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("GETRANGE", key, Integer.toString(start), Integer.toString(end)));
+    }
+
+    public static Observable<RedisMessage> cmdSetRange(final String key, final int offset, final String value) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("SETRANGE", key, Integer.toString(offset), value));
+    }
+
     public static Observable<RedisMessage> cmdDel(final String... keys) {
         final List<String> cmds = new ArrayList<>();
         cmds.add("DEL");
