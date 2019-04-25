@@ -177,6 +177,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("EXISTS", key));
     }
 
+    public static Observable<RedisMessage> cmdSetBit(final String key, final long offset, final byte bit) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("SETBIT", key, Long.toString(offset), Byte.toString(bit)));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
