@@ -181,6 +181,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("SETBIT", key, Long.toString(offset), Byte.toString(bit)));
     }
 
+    public static Observable<RedisMessage> cmdGetBit(final String key, final long offset) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("GETBIT", key, Long.toString(offset)));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
