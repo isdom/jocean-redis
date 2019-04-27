@@ -185,6 +185,11 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("GETBIT", key, Long.toString(offset)));
     }
 
+    public static Observable<RedisMessage> cmdBitCount(final String key) {
+        // TODO add start & end
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("BITCOUNT", key));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
