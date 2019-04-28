@@ -186,8 +186,11 @@ public class RedisUtil {
     }
 
     public static Observable<RedisMessage> cmdBitCount(final String key) {
-        // TODO add start & end
         return Observable.<RedisMessage>just(RedisUtil.strs2array("BITCOUNT", key));
+    }
+
+    public static Observable<RedisMessage> cmdBitCount(final String key, final long start, final long end) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("BITCOUNT", key, Long.toString(start), Long.toString(end)));
     }
 
     public static Observable<RedisMessage> error(final String errorMessage) {
