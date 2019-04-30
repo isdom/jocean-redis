@@ -197,6 +197,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("BITPOS", key, Byte.toString(bit)));
     }
 
+    public static Observable<RedisMessage> cmdBitPos(final String key, final byte bit, final long start, final long end) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("BITPOS", key, Byte.toString(bit), Long.toString(start), Long.toString(end)));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
