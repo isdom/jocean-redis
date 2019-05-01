@@ -201,6 +201,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("BITPOS", key, Byte.toString(bit), Long.toString(start), Long.toString(end)));
     }
 
+    public static Observable<RedisMessage> cmdHSet(final String key, final String field, final String value) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HSET", key, field, value));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
