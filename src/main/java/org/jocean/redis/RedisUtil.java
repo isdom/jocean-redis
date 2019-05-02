@@ -205,6 +205,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HSET", key, field, value));
     }
 
+    public static Observable<RedisMessage> cmdHGet(final String key, final String field) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HGET", key, field));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
