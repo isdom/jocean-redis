@@ -217,6 +217,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HLEN", key));
     }
 
+    public static Observable<RedisMessage> cmdHDel(final String key, final String field) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HDEL", key, field));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
