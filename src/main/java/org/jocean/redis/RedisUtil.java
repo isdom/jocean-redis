@@ -225,6 +225,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HKEYS", key));
     }
 
+    public static Observable<RedisMessage> cmdHVals(final String key) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HVALS", key));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
