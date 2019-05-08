@@ -209,6 +209,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HGET", key, field));
     }
 
+    public static Observable<RedisMessage> cmdHGetAll(final String key) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HGETALL", key));
+    }
+
     public static Observable<RedisMessage> cmdHExists(final String key, final String field) {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HEXISTS", key, field));
     }
