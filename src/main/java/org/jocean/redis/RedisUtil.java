@@ -233,6 +233,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HVALS", key));
     }
 
+    public static Observable<RedisMessage> cmdHIncrBy(final String key, final String field, final long increment) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HINCRBY", key, Long.toString(increment)));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
