@@ -237,6 +237,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HINCRBY", key, Long.toString(increment)));
     }
 
+    public static Observable<RedisMessage> cmdHIncrByFloat(final String key, final String field, final float increment) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HINCRBYFLOAT", key, Float.toString(increment)));
+    }
+
     public static Observable<RedisMessage> error(final String errorMessage) {
         return Observable.<RedisMessage>error(new RuntimeException(errorMessage));
     }
