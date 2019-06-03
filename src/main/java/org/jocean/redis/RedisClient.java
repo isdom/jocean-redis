@@ -5,7 +5,7 @@ package org.jocean.redis;
 
 import java.net.SocketAddress;
 
-import org.jocean.idiom.EndAware;
+import org.jocean.idiom.HaltAware;
 
 import io.netty.handler.codec.redis.RedisMessage;
 import rx.Observable;
@@ -19,7 +19,7 @@ public interface RedisClient extends AutoCloseable {
     @Override
     public void close();
 
-    public interface RedisConnection extends AutoCloseable, EndAware<RedisConnection> {
+    public interface RedisConnection extends AutoCloseable, HaltAware<RedisConnection> {
         public Action0 closer();
         @Override
         public void close();

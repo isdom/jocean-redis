@@ -12,8 +12,8 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.CloseException;
 import org.jocean.http.TransportException;
 import org.jocean.http.util.Nettys;
-import org.jocean.idiom.EndAwareSupport;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.HaltAwareSupport;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.redis.RedisClient.RedisConnection;
 import org.slf4j.Logger;
@@ -46,25 +46,25 @@ class DefaultRedisConnection implements RedisConnection, Comparable<DefaultRedis
     private final InterfaceSelector _selector = new InterfaceSelector();
 
     @SafeVarargs
-    DefaultRedisConnection(final Channel channel, final Action1<RedisConnection> ... onEnds) {
+    DefaultRedisConnection(final Channel channel, final Action1<RedisConnection> ... onhalts) {
 
-        this._endSupport = new EndAwareSupport<RedisConnection>(this._selector);
+        this._haltSupport = new HaltAwareSupport<RedisConnection>(this._selector);
 
         this._channel = channel;
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
 
-        Nettys.applyToChannel(onEnd(),
+        Nettys.applyToChannel(onHalt(),
                 channel,
                 RedisHandlers.ON_EXCEPTION_CAUGHT,
                 (Action1<Throwable>)cause->fireClosed(cause));
 
-        Nettys.applyToChannel(onEnd(),
+        Nettys.applyToChannel(onHalt(),
                 channel,
                 RedisHandlers.ON_CHANNEL_INACTIVE,
                 (Action0)()->fireClosed(new TransportException("channelInactive of " + channel)));
 
-        for (final Action1<RedisConnection> onend : onEnds) {
-            doOnEnd(onend);
+        for (final Action1<RedisConnection> onhalt : onhalts) {
+            doOnHalt(onhalt);
         }
         if (!channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
@@ -73,7 +73,7 @@ class DefaultRedisConnection implements RedisConnection, Comparable<DefaultRedis
 
     private final Op _op;
     private final Channel _channel;
-    private final EndAwareSupport<RedisConnection> _endSupport;
+    private final HaltAwareSupport<RedisConnection> _haltSupport;
 
     @Override
     public void close() {
@@ -90,23 +90,23 @@ class DefaultRedisConnection implements RedisConnection, Comparable<DefaultRedis
     }
 
     @Override
-    public Action1<Action0> onEnd() {
-        return  this._endSupport.onEnd(this);
+    public Action1<Action0> onHalt() {
+        return  this._haltSupport.onHalt(this);
     }
 
     @Override
-    public Action1<Action1<RedisConnection>> onEndOf() {
-        return  this._endSupport.onEndOf(this);
+    public Action1<Action1<RedisConnection>> onHaltOf() {
+        return  this._haltSupport.onHaltOf(this);
     }
 
     @Override
-    public Action0 doOnEnd(final Action0 onend) {
-        return this._endSupport.doOnEnd(this, onend);
+    public Action0 doOnHalt(final Action0 onend) {
+        return this._haltSupport.doOnHalt(this, onend);
     }
 
     @Override
-    public Action0 doOnEnd(final Action1<RedisConnection> onend) {
-        return this._endSupport.doOnEnd(this, onend);
+    public Action0 doOnHalt(final Action1<RedisConnection> onend) {
+        return this._haltSupport.doOnHalt(this, onend);
     }
 
     boolean isTransacting() {
@@ -168,7 +168,7 @@ class DefaultRedisConnection implements RedisConnection, Comparable<DefaultRedis
 
         unsubscribeOutbound();
 
-        this._endSupport.fireAllActions(this);
+        this._haltSupport.fireAllActions(this);
     }
 
     private static String errorAsString(final Throwable e) {
