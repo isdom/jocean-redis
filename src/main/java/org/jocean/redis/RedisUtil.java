@@ -272,10 +272,32 @@ public class RedisUtil {
         return (message instanceof FullBulkStringRedisMessage) ? ((FullBulkStringRedisMessage)message).isNull() : false;
     }
 
+    public static boolean equalsInteger(final RedisMessage message, final long expect) {
+        if (message instanceof IntegerRedisMessage) {
+            final IntegerRedisMessage intmsg = (IntegerRedisMessage)message;
+            return intmsg.value() == expect;
+        }
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("redis resp is not IntegerRedisMessage but [{}]", expect, dumpAggregatedRedisMessage(message));
+        }
+        return false;
+    }
+
+    public static Func1<RedisMessage, Boolean> equalsInteger(final long expect) {
+        return msg -> equalsInteger(msg, expect);
+    }
+
     public static Func1<RedisMessage, Observable<RedisMessage>> ifOKThenElse(
             final Observable<RedisMessage> thenRequest,
             final Observable<RedisMessage> elseRequest) {
         return resp -> RedisUtil.isOK(resp) ? thenRequest : elseRequest;
+    }
+
+    public static Func1<RedisMessage, Observable<RedisMessage>> ifThenElse(
+            final Func1<RedisMessage, Boolean> condition,
+            final Observable<RedisMessage> thenRequest,
+            final Observable<RedisMessage> elseRequest) {
+        return resp -> condition.call(resp) ? thenRequest : elseRequest;
     }
 
     @SafeVarargs
