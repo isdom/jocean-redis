@@ -205,6 +205,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HSET", key, field, value));
     }
 
+    public static Observable<RedisMessage> cmdHMSet(final String key, final String...fvs) {
+        return Observable.<RedisMessage>just(RedisUtil.addstrs(RedisUtil.strs2array("HMSET", key), fvs));
+    }
+
     public static Observable<RedisMessage> cmdHGet(final String key, final String field) {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HGET", key, field));
     }
@@ -251,6 +255,13 @@ public class RedisUtil {
             children.add(str2bulk(cmd));
         }
         return new ArrayRedisMessage(children);
+    }
+
+    public static ArrayRedisMessage addstrs(final ArrayRedisMessage msg, final String... strs) {
+        for (final String cmd : strs) {
+            msg.children().add(str2bulk(cmd));
+        }
+        return msg;
     }
 
     public static FullBulkStringRedisMessage str2bulk(final String str) {
