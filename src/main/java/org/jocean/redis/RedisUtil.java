@@ -205,6 +205,10 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("HSET", key, field, value));
     }
 
+    public static Observable<RedisMessage> cmdHSetNX(final String key, final String field, final String value) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("HSETNX", key, field, value));
+    }
+
     public static Observable<RedisMessage> cmdHMSet(final String key, final String...fvs) {
         return Observable.<RedisMessage>just(RedisUtil.addstrs(RedisUtil.strs2array("HMSET", key), fvs));
     }
