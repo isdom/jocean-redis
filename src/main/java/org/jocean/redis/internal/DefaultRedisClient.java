@@ -42,8 +42,7 @@ public class DefaultRedisClient implements RedisClient {
         }
     }
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultRedisClient.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultRedisClient.class);
 
     private final static Action1<Channel> ADD_CODEC_AND_SET_READY = channel -> {
             final ChannelPipeline p = channel.pipeline();
@@ -109,6 +108,15 @@ public class DefaultRedisClient implements RedisClient {
             new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
 
+    public DefaultRedisClient(final EventLoopGroup eventLoopGroup) {
+        this(new AbstractChannelCreator() {
+            @Override
+            protected void initializeBootstrap(final Bootstrap bootstrap) {
+                bootstrap.group(eventLoopGroup).channel(NioSocketChannel.class);
+            }},
+            new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
+    }
+
     public DefaultRedisClient(
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory) {
@@ -120,8 +128,7 @@ public class DefaultRedisClient implements RedisClient {
             new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
 
-    public DefaultRedisClient(
-            final ChannelCreator channelCreator) {
+    public DefaultRedisClient(final ChannelCreator channelCreator) {
         this(channelCreator, new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
 

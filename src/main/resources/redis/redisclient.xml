@@ -5,7 +5,7 @@
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
     <bean id="redisClient" class="org.jocean.redis.internal.DefaultRedisClient">
-        <constructor-arg value="${redis.client.thread.count:0}"/>
+        <constructor-arg ref="nioEventLoopGroup"/>
         <property name="fornew">
             <bean class="org.jocean.redis.RedisUtil"
                 factory-method="composite">
