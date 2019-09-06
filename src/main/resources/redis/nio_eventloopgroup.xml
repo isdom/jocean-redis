@@ -6,6 +6,11 @@
         
     <bean id="nioEventLoopGroup" class="io.netty.channel.nio.NioEventLoopGroup">
         <constructor-arg value="${redis.client.thread.count:0}"/>
+        <constructor-arg>
+            <bean class="org.jocean.redis.ThreadFactoryUtil" factory-method="build">
+                <constructor-arg value="${redis.client.thread.name:redis}"/>
+            </bean>
+        </constructor-arg>
     </bean>
      
 </beans>
