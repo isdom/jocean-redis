@@ -14,6 +14,7 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.redis.RedisClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -168,6 +169,16 @@ public class DefaultRedisClient implements RedisClient {
     public void setDefaultRedisServer(final SocketAddress defaultRedisServerAddr) {
         this._defaultRemoteAddress = defaultRedisServerAddr;
     }
+
+    @Override
+    public String toString() {
+        final StringBuilder builder = new StringBuilder();
+        builder.append("DefaultRedisClient [redisName=").append(_redisName).append("]");
+        return builder.toString();
+    }
+
+    @Value("${redis.name}")
+    private String _redisName;
 
     private final ChannelPool _channelPool;
     private final Action1<RedisConnection> _doRecycleChannel;
