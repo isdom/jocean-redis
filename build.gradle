@@ -16,7 +16,7 @@ configurations {
 
 dependencies {
     compile 'org.jocean:jocean-http:0.0.2-SNAPSHOT'
-    compile 'com.google.guava:guava:28.1-jre'
+    compile "com.google.guava:guava:${guavaVersion}"
     compile "org.springframework:spring-beans:${springVersion}"
     
 	testCompile 'junit:junit:4.12'
