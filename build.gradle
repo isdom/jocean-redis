@@ -20,5 +20,5 @@ dependencies {
     compile "org.springframework:spring-beans:${springVersion}"
     
 	testCompile 'junit:junit:4.12'
-    testCompile 'ch.qos.logback:logback-classic:1.2.3'
+    testCompile 'ch.qos.logback:logback-classic:1.2.7'
 }
